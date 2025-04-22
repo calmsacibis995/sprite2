@@ -189,10 +189,48 @@ static void
 Init(void)
 {
 	ReturnStatus status;
-	char *initArgs[10]
-	char argBuffer[100]
-	char bootCommand[103]
+	char *initArgs[10];
+	char argBuffer[100];
+	char bootCommand[103];
 	char *ptr;
 	int argc, i, argLength;
 	Fs_Stream *dummy;
+
+	bzero(bootCommand, sizeof(bootCommand));
+	argc = Mach_GetBootArgs(8, 100, &(initArgs[2]), argBuffer);
+	if (argc > 0)
+		argLength = (((int) initArgs[argc+1]) + strlen(initArgs[argc+1]) + 1 - ((int) argBuffer));
+	else
+		argLength = 0;
+
+	if (argLength > 0) {
+		initArgs[1] = "-b";
+		ptr = bootCommand;
+		for (i = 0; i < argLength; i++) {
+			if (argBuffer[i] == '\0')
+				*ptr++ = ' ';
+			else
+				 *ptr++ = argBuffer[i];
+		}
+		bootCommand[argLength] = '\0';
+		initArgs[2] = bootCommand;
+		initArgs[argc + 2] = (char *) NIL;
+	} else
+		initArgs[1] = (char *) NIL;
+
+	if (main_AltInit != 0) {
+		initArgs[0] = main_AltInit;
+		printf("Execing \"%s\"\n", initArgs[0]);
+		status = Proc_KernExec(initArgs[0], initArgs);
+		printf("Init: Could not exec %s status %x.\n", initArgs[0], status);
+	}
+
+	status = Fs_Open(INIT, FS_EXECUTE | FS_FOLLOW, FS_FILE, 0, &dummy);
+	if (status != SUCCESS)
+		printf("Can't open %s <0x%x>\n", INIT,status);
+
+	initArgs[0] = INIT;
+	status = Proc_KernExec(initArgs[0], initArgs);
+	printf("Init: Could not exec %s status %x.\n", initArgs[0], status);
+	Proc_Exit(1);
 }
